@@ -1,11 +1,6 @@
 package com.squareup.spoon;
 
-import com.android.ddmlib.AndroidDebugBridge;
-import com.android.ddmlib.CollectingOutputReceiver;
-import com.android.ddmlib.DdmPreferences;
-import com.android.ddmlib.IDevice;
-import com.android.ddmlib.InstallException;
-import com.android.ddmlib.SyncService;
+import com.android.ddmlib.*;
 import com.android.ddmlib.logcat.LogCatMessage;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.ITestRunListener;
@@ -13,32 +8,21 @@ import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.squareup.spoon.adapters.TestIdentifierAdapter;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.TrueFileFilter;
+
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.filefilter.TrueFileFilter;
 
 import static com.android.ddmlib.FileListingService.FileEntry;
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static com.google.common.base.Strings.nullToEmpty;
-import static com.squareup.spoon.Spoon.SPOON_SCREENSHOTS;
 import static com.squareup.spoon.Spoon.SPOON_FILES;
-import static com.squareup.spoon.SpoonLogger.logDebug;
-import static com.squareup.spoon.SpoonLogger.logError;
-import static com.squareup.spoon.SpoonLogger.logInfo;
-import static com.squareup.spoon.SpoonUtils.GSON;
-import static com.squareup.spoon.SpoonUtils.createAnimatedGif;
-import static com.squareup.spoon.SpoonUtils.obtainDirectoryFileEntry;
-import static com.squareup.spoon.SpoonUtils.obtainRealDevice;
+import static com.squareup.spoon.Spoon.SPOON_SCREENSHOTS;
+import static com.squareup.spoon.SpoonLogger.*;
+import static com.squareup.spoon.SpoonUtils.*;
 
 /** Represents a single device and the test configuration to be executed. */
 public final class SpoonDeviceRunner {
@@ -60,7 +44,8 @@ public final class SpoonDeviceRunner {
   private final boolean noAnimations;
   private final int adbTimeout;
   private final List<String> instrumentationArgs;
-  private final List<String> className;
+  private final int shardCount;
+	private final String className;
   private final String methodName;
   private final IRemoteAndroidTestRunner.TestSize testSize;
   private final File work;
@@ -91,8 +76,8 @@ public final class SpoonDeviceRunner {
   SpoonDeviceRunner(File sdk, File apk, File testApk, File output, String serial, boolean debug,
       boolean noAnimations, int adbTimeout, String classpath,
       SpoonInstrumentationInfo instrumentationInfo, List<String> instrumentationArgs,
-      List<String> className, String methodName, IRemoteAndroidTestRunner.TestSize testSize,
-      List<ITestRunListener> testRunListeners) {
+      String className, String methodName, IRemoteAndroidTestRunner.TestSize testSize,
+      List<ITestRunListener> testRunListeners, int shardCount) {
     this.sdk = sdk;
     this.apk = apk;
     this.testApk = testApk;
@@ -103,6 +88,7 @@ public final class SpoonDeviceRunner {
     this.instrumentationArgs = instrumentationArgs;
     this.className = className;
     this.methodName = methodName;
+		this.shardCount = shardCount;
     this.testSize = testSize;
     this.classpath = classpath;
     this.instrumentationInfo = instrumentationInfo;
@@ -219,15 +205,15 @@ public final class SpoonDeviceRunner {
     // Run all the tests! o/
     SpoonTestRunListener spoonListener = new SpoonTestRunListener(result, debug, testIdentifierAdapter);
     XmlTestRunListener xmlListener = new XmlTestRunListener(junitReport);
-	if (className!=null && className.size()>0) {
-    xmlListener.setCountCycle(className.size());
-    spoonListener.setCountCycle(className.size());
-		for (String clName:className) {
-			startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, clName);
+		if (shardCount > 0) {
+			  xmlListener.setCountCycle(shardCount);
+			  spoonListener.setCountCycle(shardCount);
+			  for (int i = 0; i < shardCount; i++) {
+					  startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, i, shardCount);
+			  }
+		} else {
+			  startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, 0, 0);
 		}
-	} else {
-		startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, null);
-	}
 
 
     mapLogsToTests(deviceLogger, result);
@@ -258,12 +244,15 @@ public final class SpoonDeviceRunner {
   }
 
   private void startRunner(String testPackage, String testRunner, DeviceResult.Builder result, IDevice device,
-                           SpoonTestRunListener spoonListener, XmlTestRunListener xmlListener, String className) {
+                           SpoonTestRunListener spoonListener, XmlTestRunListener xmlListener, int shardIndex, int numShards) {
     try {
       logDebug(debug, "About to actually run tests for [%s]", serial);
       RemoteAndroidTestRunner runner = new RemoteAndroidTestRunner(testPackage, testRunner, device);
       runner.setMaxtimeToOutputResponse(adbTimeout);
-
+		  if (numShards > 0) {
+        runner.addInstrumentationArg("numShards", String.valueOf(numShards));
+        runner.addInstrumentationArg("shardIndex ", String.valueOf(shardIndex));
+      }
       if (instrumentationArgs != null && instrumentationArgs.size() > 0) {
         for (String pair : instrumentationArgs) {
           int firstEqualSignIndex = pair.indexOf("=");
@@ -280,9 +269,12 @@ public final class SpoonDeviceRunner {
           runner.addInstrumentationArg(key, value);
         }
       }
-
       if (!isNullOrEmpty(className)) {
+        if (!isNullOrEmpty(methodName)) {
+          runner.setMethodName(className, methodName);
+        } else {
           runner.setClassName(className);
+        }
       }
       if (testSize != null) {
         runner.setTestSize(testSize);

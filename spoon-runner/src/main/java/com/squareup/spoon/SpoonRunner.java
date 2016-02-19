@@ -52,7 +52,8 @@ public final class SpoonRunner {
   private final boolean noAnimations;
   private final int adbTimeoutMillis;
   private final List<String> instrumentationArgs;
-  private final List<String> className;
+  private final String className;
+  private final int shardCount;
   private final String methodName;
   private final Set<String> serials;
   private final String classpath;
@@ -64,10 +65,10 @@ public final class SpoonRunner {
 
   private SpoonRunner(String title, File androidSdk, File applicationApk, File instrumentationApk,
       File output, boolean debug, boolean noAnimations, int adbTimeoutMillis, Set<String> serials,
-      String classpath, List<String> instrumentationArgs, List<String> className, String methodName,
+      String classpath, List<String> instrumentationArgs,String className, String methodName,
       IRemoteAndroidTestRunner.TestSize testSize, boolean failIfNoDeviceConnected,
       List<ITestRunListener> testRunListeners, boolean sequential, File initScript,
-      boolean terminateAdb) {
+      boolean terminateAdb, int shardCount) {
     this.title = title;
     this.androidSdk = androidSdk;
     this.applicationApk = applicationApk;
@@ -86,6 +87,7 @@ public final class SpoonRunner {
     this.testRunListeners = testRunListeners;
     this.terminateAdb = terminateAdb;
     this.initScript = initScript;
+    this.shardCount = shardCount;
 
     if (sequential) {
       this.threadExecutor = Executors.newSingleThreadExecutor();
@@ -271,7 +273,7 @@ public final class SpoonRunner {
   private SpoonDeviceRunner getTestRunner(String serial, SpoonInstrumentationInfo testInfo) {
     return new SpoonDeviceRunner(androidSdk, applicationApk, instrumentationApk, output, serial,
         debug, noAnimations, adbTimeoutMillis, classpath, testInfo, instrumentationArgs, className,
-        methodName, testSize, testRunListeners);
+        methodName, testSize, testRunListeners, shardCount);
   }
 
   /** Build a test suite for the specified devices and configuration. */
@@ -285,7 +287,8 @@ public final class SpoonRunner {
     private Set<String> serials;
     private String classpath = System.getProperty("java.class.path");
     private List<String> instrumentationArgs;
-    private List<String> className;
+    private String className;
+    private int shardCount;
     private String methodName;
     private boolean noAnimations;
     private IRemoteAndroidTestRunner.TestSize testSize;
@@ -387,8 +390,13 @@ public final class SpoonRunner {
       return this;
     }
 
-    public Builder setClassName(List<String> className) {
+    public Builder setClassName(String className) {
       this.className = className;
+      return this;
+    }
+
+    public Builder setShardCount(int shardCount) {
+      this.shardCount = shardCount;
       return this;
     }
 
@@ -443,7 +451,7 @@ public final class SpoonRunner {
       return new SpoonRunner(title, androidSdk, applicationApk, instrumentationApk, output, debug,
           noAnimations, adbTimeoutMillis, serials, classpath, instrumentationArgs, className,
           methodName, testSize, failIfNoDeviceConnected, testRunListeners, sequential, initScript,
-          terminateAdb);
+          terminateAdb, shardCount);
     }
   }
 
@@ -476,8 +484,11 @@ public final class SpoonRunner {
             + " times for multiple entries. Usage: --e <NAME>=<VALUE>.")
     public List<String> instrumentationArgs;
 
-    @Parameter(names = { "--class-name" }, variableArity = true, splitter = NoSplitter.class, description = "Test classes name to run (fully-qualified). This can be used multiple")
-    public List<String> className;
+    @Parameter(names = { "--class-name" }, description = "Test class name to run (fully-qualified)")
+    public String className;
+
+    @Parameter(names = { "--shard-count" }, description = "Test shard count. Test will start n-count times")
+    public int shardCount;
 
     @Parameter(names = { "--method-name" },
         description = "Test method name to run (must also use --class-name)") //
@@ -587,6 +598,7 @@ public final class SpoonRunner {
         .setInitScript(parsedArgs.initScript)
         .setInstrumentationArgs(parsedArgs.instrumentationArgs)
         .setClassName(parsedArgs.className)
+        .setShardCount(parsedArgs.shardCount)
         .setMethodName(parsedArgs.methodName);
 
     if (parsedArgs.serials == null || parsedArgs.serials.isEmpty()) {
