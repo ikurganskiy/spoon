@@ -29,6 +29,7 @@ import org.apache.commons.io.filefilter.TrueFileFilter;
 
 import static com.android.ddmlib.FileListingService.FileEntry;
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static com.google.common.base.Strings.nullToEmpty;
 import static com.squareup.spoon.Spoon.SPOON_SCREENSHOTS;
 import static com.squareup.spoon.Spoon.SPOON_FILES;
 import static com.squareup.spoon.SpoonLogger.logDebug;
@@ -59,7 +60,7 @@ public final class SpoonDeviceRunner {
   private final boolean noAnimations;
   private final int adbTimeout;
   private final List<String> instrumentationArgs;
-  private final String className;
+  private final List<String> className;
   private final String methodName;
   private final IRemoteAndroidTestRunner.TestSize testSize;
   private final File work;
@@ -90,7 +91,7 @@ public final class SpoonDeviceRunner {
   SpoonDeviceRunner(File sdk, File apk, File testApk, File output, String serial, boolean debug,
       boolean noAnimations, int adbTimeout, String classpath,
       SpoonInstrumentationInfo instrumentationInfo, List<String> instrumentationArgs,
-      String className, String methodName, IRemoteAndroidTestRunner.TestSize testSize,
+      List<String> className, String methodName, IRemoteAndroidTestRunner.TestSize testSize,
       List<ITestRunListener> testRunListeners) {
     this.sdk = sdk;
     this.apk = apk;
@@ -216,48 +217,18 @@ public final class SpoonDeviceRunner {
     SpoonDeviceLogger deviceLogger = new SpoonDeviceLogger(device);
 
     // Run all the tests! o/
-    try {
-      logDebug(debug, "About to actually run tests for [%s]", serial);
-      RemoteAndroidTestRunner runner = new RemoteAndroidTestRunner(testPackage, testRunner, device);
-      runner.setMaxtimeToOutputResponse(adbTimeout);
+    SpoonTestRunListener spoonListener = new SpoonTestRunListener(result, debug, testIdentifierAdapter);
+    XmlTestRunListener xmlListener = new XmlTestRunListener(junitReport);
+	if (className!=null && className.size()>0) {
+    xmlListener.setCountCycle(className.size());
+    spoonListener.setCountCycle(className.size());
+		for (String clName:className) {
+			startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, clName);
+		}
+	} else {
+		startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, null);
+	}
 
-      if (instrumentationArgs != null && instrumentationArgs.size() > 0) {
-        for (String pair : instrumentationArgs) {
-          int firstEqualSignIndex = pair.indexOf("=");
-          if (firstEqualSignIndex <= -1) {
-            //No Equal Sign, can't process
-            continue;
-          }
-          String key = pair.substring(0, firstEqualSignIndex);
-          String value = pair.substring(firstEqualSignIndex + 1);
-          if (isNullOrEmpty(key) || isNullOrEmpty(value)) {
-            //invalid values, skipping
-            continue;
-          }
-          runner.addInstrumentationArg(key, value);
-        }
-      }
-
-      if (!isNullOrEmpty(className)) {
-        if (isNullOrEmpty(methodName)) {
-          runner.setClassName(className);
-        } else {
-          runner.setMethodName(className, methodName);
-        }
-      }
-      if (testSize != null) {
-        runner.setTestSize(testSize);
-      }
-      List<ITestRunListener> listeners = new ArrayList<ITestRunListener>();
-      listeners.add(new SpoonTestRunListener(result, debug, testIdentifierAdapter));
-      listeners.add(new XmlTestRunListener(junitReport));
-      if (testRunListeners != null) {
-        listeners.addAll(testRunListeners);
-      }
-      runner.run(listeners);
-    } catch (Exception e) {
-      result.addException(e);
-    }
 
     mapLogsToTests(deviceLogger, result);
 
@@ -284,6 +255,48 @@ public final class SpoonDeviceRunner {
     logDebug(debug, "Done running for [%s]", serial);
 
     return result.build();
+  }
+
+  private void startRunner(String testPackage, String testRunner, DeviceResult.Builder result, IDevice device,
+                           SpoonTestRunListener spoonListener, XmlTestRunListener xmlListener, String className) {
+    try {
+      logDebug(debug, "About to actually run tests for [%s]", serial);
+      RemoteAndroidTestRunner runner = new RemoteAndroidTestRunner(testPackage, testRunner, device);
+      runner.setMaxtimeToOutputResponse(adbTimeout);
+
+      if (instrumentationArgs != null && instrumentationArgs.size() > 0) {
+        for (String pair : instrumentationArgs) {
+          int firstEqualSignIndex = pair.indexOf("=");
+          if (firstEqualSignIndex <= -1) {
+            //No Equal Sign, can't process
+            continue;
+          }
+          String key = pair.substring(0, firstEqualSignIndex);
+          String value = pair.substring(firstEqualSignIndex + 1);
+          if (isNullOrEmpty(key) || isNullOrEmpty(value)) {
+            //invalid values, skipping
+            continue;
+          }
+          runner.addInstrumentationArg(key, value);
+        }
+      }
+
+      if (!isNullOrEmpty(className)) {
+          runner.setClassName(className);
+      }
+      if (testSize != null) {
+        runner.setTestSize(testSize);
+      }
+      List<ITestRunListener> listeners = new ArrayList<ITestRunListener>();
+      listeners.add(spoonListener);
+      listeners.add(xmlListener);
+      if (testRunListeners != null) {
+        listeners.addAll(testRunListeners);
+      }
+      runner.run(listeners);
+    } catch (Exception e) {
+      result.addException(e);
+    }
   }
 
   private void handleImages(DeviceResult.Builder result, File screenshotDir) throws IOException {

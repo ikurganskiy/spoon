@@ -52,7 +52,7 @@ public final class SpoonRunner {
   private final boolean noAnimations;
   private final int adbTimeoutMillis;
   private final List<String> instrumentationArgs;
-  private final String className;
+  private final List<String> className;
   private final String methodName;
   private final Set<String> serials;
   private final String classpath;
@@ -64,7 +64,7 @@ public final class SpoonRunner {
 
   private SpoonRunner(String title, File androidSdk, File applicationApk, File instrumentationApk,
       File output, boolean debug, boolean noAnimations, int adbTimeoutMillis, Set<String> serials,
-      String classpath, List<String> instrumentationArgs, String className, String methodName,
+      String classpath, List<String> instrumentationArgs, List<String> className, String methodName,
       IRemoteAndroidTestRunner.TestSize testSize, boolean failIfNoDeviceConnected,
       List<ITestRunListener> testRunListeners, boolean sequential, File initScript,
       boolean terminateAdb) {
@@ -285,7 +285,7 @@ public final class SpoonRunner {
     private Set<String> serials;
     private String classpath = System.getProperty("java.class.path");
     private List<String> instrumentationArgs;
-    private String className;
+    private List<String> className;
     private String methodName;
     private boolean noAnimations;
     private IRemoteAndroidTestRunner.TestSize testSize;
@@ -387,7 +387,7 @@ public final class SpoonRunner {
       return this;
     }
 
-    public Builder setClassName(String className) {
+    public Builder setClassName(List<String> className) {
       this.className = className;
       return this;
     }
@@ -439,10 +439,6 @@ public final class SpoonRunner {
       checkNotNull(instrumentationApk, "Instrumentation APK is required.");
       checkNotNull(output, "Output path is required.");
       checkNotNull(serials, "Device serials are required.");
-      if (!isNullOrEmpty(methodName)) {
-        checkArgument(!isNullOrEmpty(className),
-            "Must specify class name if you're specifying a method name.");
-      }
 
       return new SpoonRunner(title, androidSdk, applicationApk, instrumentationApk, output, debug,
           noAnimations, adbTimeoutMillis, serials, classpath, instrumentationArgs, className,
@@ -480,8 +476,8 @@ public final class SpoonRunner {
             + " times for multiple entries. Usage: --e <NAME>=<VALUE>.")
     public List<String> instrumentationArgs;
 
-    @Parameter(names = { "--class-name" }, description = "Test class name to run (fully-qualified)")
-    public String className;
+    @Parameter(names = { "--class-name" }, variableArity = true, splitter = NoSplitter.class, description = "Test classes name to run (fully-qualified). This can be used multiple")
+    public List<String> className;
 
     @Parameter(names = { "--method-name" },
         description = "Test method name to run (must also use --class-name)") //

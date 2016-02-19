@@ -18,6 +18,8 @@ final class SpoonTestRunListener implements ITestRunListener {
       new HashMap<TestIdentifier, DeviceTestResult.Builder>();
   private final boolean debug;
   private final TestIdentifierAdapter testIdentifierAdapter;
+  private int countCycle = 1;
+  private boolean isStarted = false;
 
   SpoonTestRunListener(DeviceResult.Builder result, boolean debug,
       TestIdentifierAdapter testIdentifierAdapter) {
@@ -29,7 +31,10 @@ final class SpoonTestRunListener implements ITestRunListener {
 
   @Override public void testRunStarted(String runName, int testCount) {
     logDebug(debug, "testCount=%d runName=%s", testCount, runName);
-    result.startTests();
+    if (!isStarted) {
+      result.startTests();
+      isStarted = true;
+    }
   }
 
   @Override public void testStarted(TestIdentifier test) {
@@ -86,7 +91,12 @@ final class SpoonTestRunListener implements ITestRunListener {
 
   @Override public void testRunEnded(long elapsedTime, Map<String, String> runMetrics) {
     logDebug(debug, "elapsedTime=%d", elapsedTime);
-    result.endTests();
+		if (--countCycle<=0) {
+			result.endTests();
+		}
   }
 
+  public void setCountCycle(int countCycle) {
+    this.countCycle = countCycle;
+  }
 }

@@ -4,6 +4,8 @@ import com.android.ddmlib.IDevice;
 import com.android.ddmlib.logcat.LogCatListener;
 import com.android.ddmlib.logcat.LogCatMessage;
 import com.android.ddmlib.logcat.LogCatReceiverTask;
+import com.google.common.base.Objects;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +41,7 @@ final class SpoonDeviceLogger implements LogCatListener {
 
     Map<DeviceTest, List<LogCatMessage>> logs = new HashMap<DeviceTest, List<LogCatMessage>>();
     DeviceTest current = null;
-    int pid = -1;
+    String pid = null;
     synchronized (messages) {
       for (LogCatMessage message : messages) {
         if (current == null) {
@@ -54,14 +56,14 @@ final class SpoonDeviceLogger implements LogCatListener {
           }
         } else {
           // Only log messages from the same PID.
-          if (pid == message.getPid()) {
+          if (Objects.equal(pid,message.getPid())) {
             logs.get(current).add(message);
           }
 
           Matcher match = MESSAGE_END.matcher(message.getMessage());
           if (match.matches() && TEST_RUNNER.equals(message.getTag())) {
             current = null;
-            pid = -1;
+            pid = null;
           }
         }
       }
