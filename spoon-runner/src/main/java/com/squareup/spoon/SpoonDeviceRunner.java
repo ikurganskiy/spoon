@@ -210,6 +210,7 @@ public final class SpoonDeviceRunner {
 			  spoonListener.setCountCycle(shardCount);
 			  for (int i = 0; i < shardCount; i++) {
 					  startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, i, shardCount);
+					  safePullDeviceFiles(device);
 			  }
 		} else {
 			  startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, 0, 0);
@@ -241,6 +242,14 @@ public final class SpoonDeviceRunner {
     logDebug(debug, "Done running for [%s]", serial);
 
     return result.build();
+  }
+
+  public void safePullDeviceFiles(IDevice device){
+    try {
+      pullDeviceFiles(device);
+    } catch (Exception ignored){
+
+    }
   }
 
   private void startRunner(String testPackage, String testRunner, DeviceResult.Builder result, IDevice device,
