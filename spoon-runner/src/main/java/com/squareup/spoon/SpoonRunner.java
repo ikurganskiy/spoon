@@ -57,7 +57,7 @@ public final class SpoonRunner {
   private final String methodName;
   private final Set<String> serials;
   private final String classpath;
-  private final IRemoteAndroidTestRunner.TestSize testSize;
+  private final String testSize;
   private final boolean failIfNoDeviceConnected;
   private final List<ITestRunListener> testRunListeners;
   private final boolean terminateAdb;
@@ -66,7 +66,7 @@ public final class SpoonRunner {
   private SpoonRunner(String title, File androidSdk, File applicationApk, File instrumentationApk,
       File output, boolean debug, boolean noAnimations, int adbTimeoutMillis, Set<String> serials,
       String classpath, List<String> instrumentationArgs,String className, String methodName,
-      IRemoteAndroidTestRunner.TestSize testSize, boolean failIfNoDeviceConnected,
+                      String testSize, boolean failIfNoDeviceConnected,
       List<ITestRunListener> testRunListeners, boolean sequential, File initScript,
       boolean terminateAdb, int shardCount) {
     this.title = title;
@@ -147,10 +147,6 @@ public final class SpoonRunner {
         instrumentationApk.getAbsolutePath());
 
     final SpoonSummary.Builder summary = new SpoonSummary.Builder().setTitle(title).start();
-
-    if (testSize != null) {
-      summary.setTestSize(testSize);
-    }
 
     if (targetCount == 1) {
       // Since there is only one device just execute it synchronously in this process.
@@ -291,7 +287,7 @@ public final class SpoonRunner {
     private int shardCount;
     private String methodName;
     private boolean noAnimations;
-    private IRemoteAndroidTestRunner.TestSize testSize;
+    private String testSize;
     private int adbTimeoutMillis = DEFAULT_ADB_TIMEOUT_SEC * 1000;
     private boolean failIfNoDeviceConnected;
     private List<ITestRunListener> testRunListeners = new ArrayList<ITestRunListener>();
@@ -400,7 +396,7 @@ public final class SpoonRunner {
       return this;
     }
 
-    public Builder setTestSize(IRemoteAndroidTestRunner.TestSize testSize) {
+    public Builder setTestSize(String testSize) {
       this.testSize = testSize;
       return this;
     }
@@ -494,9 +490,9 @@ public final class SpoonRunner {
         description = "Test method name to run (must also use --class-name)") //
     public String methodName;
 
-    @Parameter(names = { "--size" }, converter = TestSizeConverter.class,
+    @Parameter(names = { "--size" },
         description = "Only run methods with corresponding size annotation (small, medium, large)")
-    public IRemoteAndroidTestRunner.TestSize size;
+    public String size;
 
     @Parameter(names = { "--output" }, description = "Output path",
         converter = FileConverter.class) //

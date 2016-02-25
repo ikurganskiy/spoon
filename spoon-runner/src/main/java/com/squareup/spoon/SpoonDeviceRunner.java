@@ -2,7 +2,6 @@ package com.squareup.spoon;
 
 import com.android.ddmlib.*;
 import com.android.ddmlib.logcat.LogCatMessage;
-import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.ITestRunListener;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.google.common.collect.ArrayListMultimap;
@@ -26,7 +25,7 @@ import static com.squareup.spoon.SpoonUtils.*;
 
 /** Represents a single device and the test configuration to be executed. */
 public final class SpoonDeviceRunner {
-  private static final String FILE_EXECUTION = "execution.json";
+		private static final String FILE_EXECUTION = "execution.json";
   private static final String FILE_RESULT = "result.json";
   private static final String DEVICE_SCREENSHOT_DIR = "app_" + SPOON_SCREENSHOTS;
   private static final String DEVICE_FILE_DIR = "app_" + SPOON_FILES;
@@ -35,8 +34,11 @@ public final class SpoonDeviceRunner {
   static final String JUNIT_DIR = "junit-reports";
   static final String IMAGE_DIR = "image";
   static final String FILE_DIR = "file";
+		public static final String SMALL = "android.test.suitebuilder.annotation.SmallTest";
+		public static final String MEDIUM = "android.test.suitebuilder.annotation.MediumTest";
+		public static final String LARGE = "android.test.suitebuilder.annotation.LargeTest";
 
-  private final File sdk;
+		private final File sdk;
   private final File apk;
   private final File testApk;
   private final String serial;
@@ -47,7 +49,7 @@ public final class SpoonDeviceRunner {
   private final int shardCount;
 	private final String className;
   private final String methodName;
-  private final IRemoteAndroidTestRunner.TestSize testSize;
+  private final String testSize;
   private final File work;
   private final File junitReport;
   private final File imageDir;
@@ -76,7 +78,7 @@ public final class SpoonDeviceRunner {
   SpoonDeviceRunner(File sdk, File apk, File testApk, File output, String serial, boolean debug,
       boolean noAnimations, int adbTimeout, String classpath,
       SpoonInstrumentationInfo instrumentationInfo, List<String> instrumentationArgs,
-      String className, String methodName, IRemoteAndroidTestRunner.TestSize testSize,
+      String className, String methodName, String testSize,
       List<ITestRunListener> testRunListeners, int shardCount) {
     this.sdk = sdk;
     this.apk = apk;
@@ -203,17 +205,21 @@ public final class SpoonDeviceRunner {
     SpoonDeviceLogger deviceLogger = new SpoonDeviceLogger(device);
 
     // Run all the tests! o/
+		String testSizes[] = getTestSizesForRun(testSize);
+
     SpoonTestRunListener spoonListener = new SpoonTestRunListener(result, debug, testIdentifierAdapter);
     XmlTestRunListener xmlListener = new XmlTestRunListener(junitReport);
-		if (shardCount > 0) {
-			  xmlListener.setCountCycle(shardCount);
-			  spoonListener.setCountCycle(shardCount);
-			  for (int i = 0; i < shardCount; i++) {
-					  startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, i, shardCount);
-					  safePullDeviceFiles(device);
-			  }
-		} else {
-			  startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, 0, 0);
+
+		int numShard = shardCount > 0 ? shardCount : 1;
+		int cycleCount = numShard * testSizes.length;
+
+		spoonListener.setCountCycle(cycleCount);
+		xmlListener.setCountCycle(cycleCount);
+		for (String testSize:testSizes) {
+				for (int i = 0; i < numShard; i++) {
+							startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, i, numShard, testSize);
+							safePullDeviceFiles(device);
+				}
 		}
 
 
@@ -244,7 +250,20 @@ public final class SpoonDeviceRunner {
     return result.build();
   }
 
-  public void safePullDeviceFiles(IDevice device){
+		private String[] getTestSizesForRun(String testSize) {
+				if (testSize != null) {
+						if ("small".equals(testSize)) {
+								return new String[]{SMALL};
+						} else if ("medium".equals(testSize)) {
+								return new String[]{SMALL, MEDIUM};
+						} else if ("large".equals(testSize)) {
+								return new String[]{SMALL, MEDIUM, LARGE};
+						}
+				}
+				return new String[]{null};
+		}
+
+		public void safePullDeviceFiles(IDevice device){
     try {
       pullDeviceFiles(device);
     } catch (Exception ignored){
@@ -253,7 +272,7 @@ public final class SpoonDeviceRunner {
   }
 
   private void startRunner(String testPackage, String testRunner, DeviceResult.Builder result, IDevice device,
-                           SpoonTestRunListener spoonListener, XmlTestRunListener xmlListener, int shardIndex, int numShards) {
+                           SpoonTestRunListener spoonListener, XmlTestRunListener xmlListener, int shardIndex, int numShards,String testSize) {
     try {
       logDebug(debug, "About to actually run tests for [%s]", serial);
       RemoteAndroidTestRunner runner = new RemoteAndroidTestRunner(testPackage, testRunner, device);
@@ -286,7 +305,7 @@ public final class SpoonDeviceRunner {
         }
       }
       if (testSize != null) {
-        runner.setTestSize(testSize);
+        runner.addInstrumentationArg("annotation", testSize);
       }
       List<ITestRunListener> listeners = new ArrayList<ITestRunListener>();
       listeners.add(spoonListener);
