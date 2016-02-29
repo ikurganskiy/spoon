@@ -53,7 +53,9 @@ final class SpoonTestRunListener implements ITestRunListener {
       methodResults.put(test, methodResult);
     }
     logDebug(debug, "failed %s", trace);
-    methodResult.markTestAsFailed(trace);
+    if (!trace.contains("OutOfMemory")) {
+      methodResult.markTestAsFailed(trace);
+    }
   }
 
   @Override public void testAssumptionFailure(TestIdentifier test, String trace) {
@@ -91,9 +93,9 @@ final class SpoonTestRunListener implements ITestRunListener {
 
   @Override public void testRunEnded(long elapsedTime, Map<String, String> runMetrics) {
     logDebug(debug, "elapsedTime=%d", elapsedTime);
-		if (--countCycle<=0) {
-			result.endTests();
-		}
+    if (--countCycle <= 0) {
+      result.endTests();
+    }
   }
 
   public void setCountCycle(int countCycle) {

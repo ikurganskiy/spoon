@@ -1,5 +1,7 @@
 package com.squareup.spoon;
 
+import com.android.ddmlib.testrunner.TestIdentifier;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -44,5 +46,12 @@ class XmlTestRunListener extends com.android.ddmlib.testrunner.XmlTestRunListene
     }
   }
 
-
+	@Override
+	public void testFailed(TestIdentifier test, String trace) {
+			if (trace.contains("OutOfMemory")) {
+					super.testIgnored(test);
+			} else {
+					super.testFailed(test, trace);
+			}
+	}
 }
