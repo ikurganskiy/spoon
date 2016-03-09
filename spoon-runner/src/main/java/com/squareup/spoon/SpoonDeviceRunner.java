@@ -36,9 +36,11 @@ public final class SpoonDeviceRunner {
   static final String JUNIT_DIR = "junit-reports";
   static final String IMAGE_DIR = "image";
   static final String FILE_DIR = "file";
-  public static final String SMALL = "android.test.suitebuilder.annotation.SmallTest";
-  public static final String MEDIUM = "android.test.suitebuilder.annotation.MediumTest";
-  public static final String LARGE = "android.test.suitebuilder.annotation.LargeTest";
+
+  private static final String SMALL = "android.test.suitebuilder.annotation.SmallTest";
+  private static final String MEDIUM = "android.test.suitebuilder.annotation.MediumTest";
+  private static final String LARGE = "android.test.suitebuilder.annotation.LargeTest";
+  private static final String SMOKE = "android.test.suitebuilder.annotation.Smoke";
 
   private final File sdk;
   private final File apk;
@@ -205,14 +207,14 @@ public final class SpoonDeviceRunner {
     // Initiate device logging.
     SpoonDeviceLogger deviceLogger = new SpoonDeviceLogger(device);
 
-    // Run all the tests! o/
-    String testSizes[] = getTestSizesForRun(testSize);
+    // Run all the tests!
+    List<String> testSizes = getTestSizesForRun(testSize);
 
     SpoonTestRunListener spoonListener = new SpoonTestRunListener(result, debug, testIdentifierAdapter);
     XmlTestRunListener xmlListener = new XmlTestRunListener(junitReport);
 
     int numShard = shardCount > 0 ? shardCount : 1;
-    int cycleCount = numShard * testSizes.length;
+    int cycleCount = numShard * testSizes.size();
 
     spoonListener.setCountCycle(cycleCount);
     xmlListener.setCountCycle(cycleCount);
@@ -251,17 +253,26 @@ public final class SpoonDeviceRunner {
     return result.build();
   }
 
-  private String[] getTestSizesForRun(String testSize) {
+  private List<String> getTestSizesForRun(String testSize) {
+    List<String> result = new ArrayList<String>();
     if (testSize != null) {
-      if ("small".equals(testSize)) {
-        return new String[]{SMALL};
-      } else if ("medium".equals(testSize)) {
-        return new String[]{SMALL, MEDIUM};
-      } else if ("large".equals(testSize)) {
-        return new String[]{SMALL, MEDIUM, LARGE};
+      String[] sizes = testSize.split(",");
+      for (String size : sizes) {
+        if ("small".equals(size)) {
+          result.add(SMALL);
+        } else if ("medium".equals(size)) {
+          result.add(MEDIUM);
+        } else if ("large".equals(size)) {
+          result.add(LARGE);
+        } else if ("smoke".equals(size)) {
+          result.add(SMOKE);
+        }
       }
     }
-    return new String[]{null};
+    if (result.size() == 0) {
+      result.add(null);
+    }
+    return result;
   }
 
   public void safePullDeviceFiles(IDevice device) {

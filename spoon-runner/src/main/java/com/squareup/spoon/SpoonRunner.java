@@ -490,9 +490,9 @@ public final class SpoonRunner {
         description = "Test method name to run (must also use --class-name)") //
     public String methodName;
 
-    @Parameter(names = { "--size" },
+    @Parameter(names = { "--test-type" },
         description = "Only run methods with corresponding size annotation (small, medium, large)")
-    public String size;
+    public String typeTest;
 
     @Parameter(names = { "--output" }, description = "Output path",
         converter = FileConverter.class) //
@@ -587,7 +587,7 @@ public final class SpoonRunner {
         .setDebug(parsedArgs.debug)
         .setAndroidSdk(parsedArgs.sdk)
         .setNoAnimations(parsedArgs.noAnimations)
-        .setTestSize(parsedArgs.size)
+        .setTestSize(parsedArgs.typeTest)
         .setAdbTimeout(parsedArgs.adbTimeoutSeconds * 1000)
         .setFailIfNoDeviceConnected(parsedArgs.failIfNoDeviceConnected)
         .setSequential(parsedArgs.sequential)
