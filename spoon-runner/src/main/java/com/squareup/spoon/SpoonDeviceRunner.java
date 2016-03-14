@@ -11,10 +11,7 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static com.android.ddmlib.FileListingService.FileEntry;
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -161,7 +158,7 @@ public final class SpoonDeviceRunner {
 
     DeviceResult.Builder result = new DeviceResult.Builder();
 
-    IDevice device = obtainRealDevice(adb, serial);
+    final IDevice device = obtainRealDevice(adb, serial);
     logDebug(debug, "Got realDevice for [%s]", serial);
 
     // Get relevant device information.
@@ -218,10 +215,15 @@ public final class SpoonDeviceRunner {
 
     spoonListener.setCountCycle(cycleCount);
     xmlListener.setCountCycle(cycleCount);
+    PullDeviceFilesListener pullDeviceListener = new PullDeviceFilesListener(new PullDeviceFilesListener.PullDeviceListener() {
+      @Override
+      public void pullDeviceFiles() {
+        safePullDeviceFiles(device);
+      }
+    });
     for (String testSize : testSizes) {
       for (int i = 0; i < numShard; i++) {
-        startRunner(testPackage, testRunner, result, device, spoonListener, xmlListener, i, numShard, testSize);
-        safePullDeviceFiles(device);
+        startRunner(testPackage, testRunner, result, device, i, numShard, testSize, Arrays.asList(spoonListener, xmlListener, pullDeviceListener));
       }
     }
 
@@ -284,7 +286,7 @@ public final class SpoonDeviceRunner {
   }
 
   private void startRunner(String testPackage, String testRunner, DeviceResult.Builder result, IDevice device,
-                           SpoonTestRunListener spoonListener, XmlTestRunListener xmlListener, int shardIndex, int numShards, String testSize) {
+                           int shardIndex, int numShards, String testSize, List<ITestRunListener> spoonListeners) {
     try {
       logDebug(debug, "About to actually run tests for [%s]", serial);
       RemoteAndroidTestRunner runner = new RemoteAndroidTestRunner(testPackage, testRunner, device);
@@ -320,8 +322,7 @@ public final class SpoonDeviceRunner {
         runner.addInstrumentationArg("annotation", testSize);
       }
       List<ITestRunListener> listeners = new ArrayList<ITestRunListener>();
-      listeners.add(spoonListener);
-      listeners.add(xmlListener);
+      listeners.addAll(spoonListeners);
       if (testRunListeners != null) {
         listeners.addAll(testRunListeners);
       }
