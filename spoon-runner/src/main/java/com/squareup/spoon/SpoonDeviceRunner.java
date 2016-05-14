@@ -47,7 +47,7 @@ public final class SpoonDeviceRunner {
   private final boolean noAnimations;
   private final int adbTimeout;
   private final List<String> instrumentationArgs;
-  private final int shardCount;
+  private final int testCountInOneProcess;
   private final String className;
   private final String methodName;
   private final String testSize;
@@ -80,7 +80,7 @@ public final class SpoonDeviceRunner {
                     boolean noAnimations, int adbTimeout, String classpath,
                     SpoonInstrumentationInfo instrumentationInfo, List<String> instrumentationArgs,
                     String className, String methodName, String testSize,
-                    List<ITestRunListener> testRunListeners, int shardCount) {
+                    List<ITestRunListener> testRunListeners, int testCountInOneProcess) {
     this.sdk = sdk;
     this.apk = apk;
     this.testApk = testApk;
@@ -91,7 +91,7 @@ public final class SpoonDeviceRunner {
     this.instrumentationArgs = instrumentationArgs;
     this.className = className;
     this.methodName = methodName;
-    this.shardCount = shardCount;
+    this.testCountInOneProcess = testCountInOneProcess;
     this.testSize = testSize;
     this.classpath = classpath;
     this.instrumentationInfo = instrumentationInfo;
@@ -203,25 +203,29 @@ public final class SpoonDeviceRunner {
 
     // Initiate device logging.
     SpoonDeviceLogger deviceLogger = new SpoonDeviceLogger(device);
-
-    // Run all the tests!
     List<String> testSizes = getTestSizesForRun(testSize);
-
     SpoonTestRunListener spoonListener = new SpoonTestRunListener(result, debug, testIdentifierAdapter);
     XmlTestRunListener xmlListener = new XmlTestRunListener(junitReport);
-
-    int numShard = shardCount > 0 ? shardCount : 1;
-    int cycleCount = numShard * testSizes.size();
-
-    spoonListener.setCountCycle(cycleCount);
-    xmlListener.setCountCycle(cycleCount);
     PullDeviceFilesListener pullDeviceListener = new PullDeviceFilesListener(new PullDeviceFilesListener.PullDeviceListener() {
       @Override
       public void pullDeviceFiles() {
         safePullDeviceFiles(device);
       }
     });
+    Map<String, Integer> shardMap = new HashMap<String, Integer>();
+    int totalShard = 0;
     for (String testSize : testSizes) {
+      int count = getTestCount(testPackage, testRunner, device, testSize);
+      int numShard = testCountInOneProcess > 0 ? count / testCountInOneProcess : 1;
+      numShard = Math.max(numShard, 1);
+      shardMap.put(testSize, numShard);
+      totalShard += numShard;
+    }
+
+    spoonListener.setCountCycle(totalShard);
+    xmlListener.setCountCycle(totalShard);
+    for (String testSize : testSizes) {
+      int numShard = shardMap.get(testSize);
       for (int i = 0; i < numShard; i++) {
         startRunner(testPackage, testRunner, result, device, i, numShard, testSize, Arrays.asList(spoonListener, xmlListener, pullDeviceListener));
       }
@@ -285,41 +289,35 @@ public final class SpoonDeviceRunner {
     }
   }
 
+  private int getTestCount(String testPackage, String testRunner, IDevice device, String testSize) {
+
+    TestCountListener countListener = new TestCountListener();
+    try {
+      RemoteAndroidTestRunner runner = buildRunner(testPackage, testRunner, device, testSize);
+      runner.setTestCollection(true);
+      runner.run(countListener);
+    } catch (TimeoutException e) {
+      e.printStackTrace();
+    } catch (AdbCommandRejectedException e) {
+      e.printStackTrace();
+    } catch (ShellCommandUnresponsiveException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return countListener.getCount();
+
+  }
+
   private void startRunner(String testPackage, String testRunner, DeviceResult.Builder result, IDevice device,
                            int shardIndex, int numShards, String testSize, List<ITestRunListener> spoonListeners) {
     try {
       logDebug(debug, "About to actually run tests for [%s]", serial);
-      RemoteAndroidTestRunner runner = new RemoteAndroidTestRunner(testPackage, testRunner, device);
+      RemoteAndroidTestRunner runner = buildRunner(testPackage, testRunner, device, testSize);
       runner.setMaxtimeToOutputResponse(adbTimeout);
       if (numShards > 0) {
         runner.addInstrumentationArg("numShards", String.valueOf(numShards));
         runner.addInstrumentationArg("shardIndex ", String.valueOf(shardIndex));
-      }
-      if (instrumentationArgs != null && instrumentationArgs.size() > 0) {
-        for (String pair : instrumentationArgs) {
-          int firstEqualSignIndex = pair.indexOf("=");
-          if (firstEqualSignIndex <= -1) {
-            //No Equal Sign, can't process
-            continue;
-          }
-          String key = pair.substring(0, firstEqualSignIndex);
-          String value = pair.substring(firstEqualSignIndex + 1);
-          if (isNullOrEmpty(key) || isNullOrEmpty(value)) {
-            //invalid values, skipping
-            continue;
-          }
-          runner.addInstrumentationArg(key, value);
-        }
-      }
-      if (!isNullOrEmpty(className)) {
-        if (!isNullOrEmpty(methodName)) {
-          runner.setMethodName(className, methodName);
-        } else {
-          runner.setClassName(className);
-        }
-      }
-      if (testSize != null) {
-        runner.addInstrumentationArg("annotation", testSize);
       }
       List<ITestRunListener> listeners = new ArrayList<ITestRunListener>();
       listeners.addAll(spoonListeners);
@@ -330,6 +328,37 @@ public final class SpoonDeviceRunner {
     } catch (Exception e) {
       result.addException(e);
     }
+  }
+
+  private RemoteAndroidTestRunner buildRunner(String testPackage, String testRunner, IDevice device, String testSize) {
+    RemoteAndroidTestRunner runner = new RemoteAndroidTestRunner(testPackage, testRunner, device);
+    if (instrumentationArgs != null && instrumentationArgs.size() > 0) {
+      for (String pair : instrumentationArgs) {
+        int firstEqualSignIndex = pair.indexOf("=");
+        if (firstEqualSignIndex <= -1) {
+          //No Equal Sign, can't process
+          continue;
+        }
+        String key = pair.substring(0, firstEqualSignIndex);
+        String value = pair.substring(firstEqualSignIndex + 1);
+        if (isNullOrEmpty(key) || isNullOrEmpty(value)) {
+          //invalid values, skipping
+          continue;
+        }
+        runner.addInstrumentationArg(key, value);
+      }
+    }
+    if (!isNullOrEmpty(className)) {
+      if (!isNullOrEmpty(methodName)) {
+        runner.setMethodName(className, methodName);
+      } else {
+        runner.setClassName(className);
+      }
+    }
+    if (testSize != null) {
+      runner.addInstrumentationArg("annotation", testSize);
+    }
+    return runner;
   }
 
   private void handleImages(DeviceResult.Builder result, File screenshotDir) throws IOException {
