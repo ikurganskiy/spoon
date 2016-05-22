@@ -57,12 +57,12 @@ public final class SpoonDeviceRunner {
   private final File fileDir;
   private final String classpath;
   private final SpoonInstrumentationInfo instrumentationInfo;
+  private final int shardCount;
   private final List<ITestRunListener> testRunListeners;
 
   /**
    * Create a test runner for a single device.
-   *
-   * @param sdk                 Path to the local Android SDK directory.
+   *  @param sdk                 Path to the local Android SDK directory.
    * @param apk                 Path to application APK.
    * @param testApk             Path to test application APK.
    * @param output              Path to output directory.
@@ -73,14 +73,15 @@ public final class SpoonDeviceRunner {
    * @param instrumentationInfo Test apk manifest information.
    * @param className           Test class name to run or {@code null} to run all tests.
    * @param methodName          Test method name to run or {@code null} to run all tests.  Must also pass
-   *                            {@code className}.
+*                            {@code className}.
    * @param testRunListeners    Additional TestRunListener or empty list.
+   * @param shardCount
    */
   SpoonDeviceRunner(File sdk, File apk, File testApk, File output, String serial, boolean debug,
                     boolean noAnimations, int adbTimeout, String classpath,
                     SpoonInstrumentationInfo instrumentationInfo, List<String> instrumentationArgs,
                     String className, String methodName, String testSize,
-                    List<ITestRunListener> testRunListeners, int testCountInOneProcess) {
+                    List<ITestRunListener> testRunListeners, int testCountInOneProcess, int shardCount) {
     this.sdk = sdk;
     this.apk = apk;
     this.testApk = testApk;
@@ -95,6 +96,7 @@ public final class SpoonDeviceRunner {
     this.testSize = testSize;
     this.classpath = classpath;
     this.instrumentationInfo = instrumentationInfo;
+    this.shardCount = shardCount;
     serial = SpoonUtils.sanitizeSerial(serial);
     this.work = FileUtils.getFile(output, TEMP_DIR, serial);
     this.junitReport = FileUtils.getFile(output, JUNIT_DIR, serial + ".xml");
@@ -215,9 +217,12 @@ public final class SpoonDeviceRunner {
     Map<String, Integer> shardMap = new HashMap<String, Integer>();
     int totalShard = 0;
     for (String testSize : testSizes) {
-      int count = getTestCount(testPackage, testRunner, device, testSize);
-      int numShard = testCountInOneProcess > 0 ? count / testCountInOneProcess : 1;
-      numShard = Math.max(numShard, 1);
+      int numShard = shardCount;
+      if (numShard == 0) {
+        int count = getTestCount(testPackage, testRunner, device, testSize);
+        numShard = testCountInOneProcess > 0 ? count / testCountInOneProcess : 1;
+        numShard = Math.max(numShard, 2);
+      }
       shardMap.put(testSize, numShard);
       totalShard += numShard;
     }

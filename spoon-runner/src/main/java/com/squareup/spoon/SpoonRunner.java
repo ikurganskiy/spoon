@@ -57,17 +57,18 @@ public final class SpoonRunner {
   private final Set<String> serials;
   private final String classpath;
   private final String testSize;
+  private final int shardCount;
   private final boolean failIfNoDeviceConnected;
   private final List<ITestRunListener> testRunListeners;
   private final boolean terminateAdb;
   private File initScript;
 
   private SpoonRunner(String title, File androidSdk, File applicationApk, File instrumentationApk,
-      File output, boolean debug, boolean noAnimations, int adbTimeoutMillis, Set<String> serials,
-      String classpath, List<String> instrumentationArgs,String className, String methodName,
+                      File output, boolean debug, boolean noAnimations, int adbTimeoutMillis, Set<String> serials,
+                      String classpath, List<String> instrumentationArgs, String className, String methodName,
                       String testSize, boolean failIfNoDeviceConnected,
-      List<ITestRunListener> testRunListeners, boolean sequential, File initScript,
-      boolean terminateAdb, int testCountInOneProcess) {
+                      List<ITestRunListener> testRunListeners, boolean sequential, File initScript,
+                      boolean terminateAdb, int testCountInOneProcess, int shardCount) {
     this.title = title;
     this.androidSdk = androidSdk;
     this.applicationApk = applicationApk;
@@ -81,6 +82,7 @@ public final class SpoonRunner {
     this.methodName = methodName;
     this.classpath = classpath;
     this.testSize = testSize;
+    this.shardCount = shardCount;
     this.serials = ImmutableSet.copyOf(serials);
     this.failIfNoDeviceConnected = failIfNoDeviceConnected;
     this.testRunListeners = testRunListeners;
@@ -268,7 +270,7 @@ public final class SpoonRunner {
   private SpoonDeviceRunner getTestRunner(String serial, SpoonInstrumentationInfo testInfo) {
     return new SpoonDeviceRunner(androidSdk, applicationApk, instrumentationApk, output, serial,
         debug, noAnimations, adbTimeoutMillis, classpath, testInfo, instrumentationArgs, className,
-        methodName, testSize, testRunListeners, testCountInOneProcess);
+        methodName, testSize, testRunListeners, testCountInOneProcess,shardCount);
   }
 
   /** Build a test suite for the specified devices and configuration. */
@@ -293,6 +295,7 @@ public final class SpoonRunner {
     private boolean sequential;
     private File initScript;
     private boolean terminateAdb = true;
+    private int shardCount;
 
     /** Identifying title for this execution. */
     public Builder setTitle(String title) {
@@ -435,6 +438,11 @@ public final class SpoonRunner {
       return this;
     }
 
+    public Builder setShardCount(int shardCount) {
+      this.shardCount = shardCount;
+      return this;
+    }
+
     public SpoonRunner build() {
       checkNotNull(androidSdk, "SDK is required.");
       checkArgument(androidSdk.exists(), "SDK path does not exist.");
@@ -446,8 +454,9 @@ public final class SpoonRunner {
       return new SpoonRunner(title, androidSdk, applicationApk, instrumentationApk, output, debug,
           noAnimations, adbTimeoutMillis, serials, classpath, instrumentationArgs, className,
           methodName, testSize, failIfNoDeviceConnected, testRunListeners, sequential, initScript,
-          terminateAdb, testCountInOneProcess);
+          terminateAdb, testCountInOneProcess,shardCount);
     }
+
   }
 
   /**
@@ -484,6 +493,9 @@ public final class SpoonRunner {
 
     @Parameter(names = { "--test-count-in-one-process" }, description = "Test shard count. Test will start n-count times")
     public int testCountInOneProcess;
+
+    @Parameter(names = { "--shard-count" }, description = "Test shard count. Test will start n-count times")
+    public int shardCount;
 
     @Parameter(names = { "--method-name" },
         description = "Test method name to run (must also use --class-name)") //
@@ -594,6 +606,7 @@ public final class SpoonRunner {
         .setInstrumentationArgs(parsedArgs.instrumentationArgs)
         .setClassName(parsedArgs.className)
         .setTestCountInOneProcess(parsedArgs.testCountInOneProcess)
+        .setShardCount(parsedArgs.shardCount)
         .setMethodName(parsedArgs.methodName);
 
     if (parsedArgs.serials == null || parsedArgs.serials.isEmpty()) {
